@@ -12,8 +12,9 @@ def log(sql, args=()):
 #创建连接池
 async def creat_pool(loop, **kw):
     logging.info('create database connection pool...')
-    global __pool
-    __pool = await aiomysql.create_pool(
+    global avcs
+
+    avcs = await aiomysql.create_pool(
         host=kw.get('host', 'localhost'),
         port=kw.get('port', 3306),
         user=kw['user'],
@@ -26,37 +27,38 @@ async def creat_pool(loop, **kw):
         loop=loop
     )
 
+
+
+
+
+
 #select
 async def select(sql, args, size=None):
     log(sql, args)
-    global __pool
-    async with __pool.get() as conn:
-        async with conn.cursor(aiomysql.DictCursor) as cur:
-            '''sql是str'''
-            await cur.execute(sql.replace('?', '%s'), args or ())
-            if size:
-                rs = await cur.fetchmany(size)
-            else:
-                rs = await cur.fetchall()
+    print(avcs)
+    with (await avcs) as conn:
+        cur = await conn.cursor(aiomysql.DictCursor)
+        sql是str
+        await cur.execute(sql.replace('?', '%s'), args or ())
+        if size:
+            rs = await cur.fetchmany(size)
+        else:
+            rs = await cur.fetchall()
         logging.info('rows returned: %s' % len(rs))
         #返回多个tuple组成的tuple
         return rs
 
 #insert,update,delete
-async def execute(sql, args, autocommit=True):
+async def execute(sql, args):
     log(sql)
-    async with __pool.get() as conn:
-        if not autocommit:
-            await conn.begin()
+    print(avcs)
+    with (await avcs) as conn:
         try:
-            async with conn.cursor(aiomysql.DictCursor) as cur:
-                await cur.execute(sql.replace('?', '%s'), args)
-                affected = cur.rowcount
-            if not autocommit:
-                await conn.commit()
+            cur = await conn.cursor()
+            await cur.execute(sql.replace('?', '%s'), args)
+            affected = cur.rowcount
+            await cur.close()
         except BaseException as e:
-            if not autocommit:
-                await conn.rollback()
             raise
         return affected
 
@@ -211,10 +213,10 @@ class Model(dict, metaclass=ModelMetaclass):
         rs = await select(' '.join(sql), args)
         return [cls(**r) for r in rs]
 
-
     @classmethod
     async def findNumber(cls, selectField, where=None, args=None):
         #这里还不太懂
+        #_num_ 就是查出来的表示数量的字段，像select count(*) as c from XXX，_num_相当于这条语句的c，这里省略了as 关键字
         sql = ['select %s _num_ from `%s`' % (selectField, cls.__table__)]
         if where:
             sql.append('where')
@@ -232,7 +234,6 @@ class Model(dict, metaclass=ModelMetaclass):
             return None
         return cls(**rs[0])
 
-    @classmethod
     async def update(self):
         #升级数据库
         args = list(map(self.getValue, self.__fields__))
@@ -241,22 +242,25 @@ class Model(dict, metaclass=ModelMetaclass):
         if rows != 1:
             logging.warn('failed to update by primary key: affected rows: %s' % rows)
 
-    @classmethod
     async def save(self):
-        #保存到数据库
         args = list(map(self.getValueOrDefault, self.__fields__))
         args.append(self.getValueOrDefault(self.__primary_key__))
         rows = await execute(self.__insert__, args)
         if rows != 1:
-            logging.warn('failed to insert record: affected rows: %s' % rows)
+            logging.warning('failed to insert record: affected rows: %s' % rows)
 
-    @classmethod
     async def remove(self):
         #删除数据
         args = [self.getValue(self.__primary_key__)]
         rows = await execute(self.__delete__, args)
         if rows != 1:
             logging.warn('failed to remove by primary key: affected rows: %s' % rows)
+
+
+
+
+
+        
 
 
 
