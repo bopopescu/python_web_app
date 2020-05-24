@@ -38,7 +38,7 @@ async def select(sql, args, size=None):
     print(avcs)
     with (await avcs) as conn:
         cur = await conn.cursor(aiomysql.DictCursor)
-        sql是str
+        #sql是str
         await cur.execute(sql.replace('?', '%s'), args or ())
         if size:
             rs = await cur.fetchmany(size)
