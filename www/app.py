@@ -53,10 +53,12 @@ async def logger_factory(app,handler):#协程，两个参数
         return await handler(request)#返回
     return logger_middleware
 
+
 #函数返回值转化为`web.response`对象
 async def response_factory(app,handler):
     async def response_middleware(request):
         logging.info('Response handler...')
+
         r = await handler(request)
         if isinstance(r, web.StreamResponse):
             return r
@@ -73,7 +75,7 @@ async def response_factory(app,handler):
         if isinstance(r,dict):
             template = r.get('__template__')
             if template is None: #序列化JSON那章，传递数据
-                resp = web.Response(body=json.dumps(r, ensure_ascii=False, default=lambda o: o.__dict__).encode('utf-8')) #https://docs.python.org/2/library/json.html#basic-usage
+                resp = web.Response(body=json.dumps(r, ensure_ascii=False, default=lambda o: o.__dict__).encode('utf-8'),content_type="text/html") #https://docs.python.org/2/library/json.html#basic-usage
                 return resp
             else: #jinja2模板
                 resp = web.Response(body=app['__templating__'].get_template(template).render(**r).encode('utf-8'))
